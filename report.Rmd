@@ -1,0 +1,209 @@
+---
+title: "Ortholog data"
+author: "Igor Trujnara"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(scales)
+```
+
+This is a preview based on 100 random proteins.
+
+We load the data:
+```{r read_data}
+setwd("out_1k")
+stats <- read.csv("orthologs/stats/aggregated_stats.csv")
+hits <- read.csv("orthologs/stats/aggregated_hits.csv")
+```
+
+Let's look at the stats first. We will examine the empirical distributions.
+```{r summary_max}
+summary(stats$percent_max)
+```
+
+This is all zeros. Disappointed but not surprised. We don't even have full ID mapping offline.
+
+```{r summary_privates}
+summary(stats$percent_privates)
+```
+
+This is pretty high, although fortunately we see signs of some agreement. Note that the zeros mean nothing was found.
+
+```{r summary_goodness}
+summary(stats$goodness)
+```
+
+Keeping in mind that the real range is from 0.33 to 1.0, those values are really low. Same note for zeros.
+
+Now let's make some plots. We skip percentage of consensus as it's boring.
+```{r privates_plot}
+privates_plot <- ggplot(stats) +
+  aes(x = percent_privates) +
+  geom_histogram(bins = 50) +
+  labs(x = "Percentage of privates", y = "Count") +
+  theme_light()
+privates_plot
+```
+
+```{r privates_plot_but_nicer}
+privates_plot <- ggplot(stats) +
+  aes(x = percent_privates) +
+  geom_density(fill = "darkorange", alpha = 0.6) +
+  labs(x = "Percentage of privates", y = "Density",
+       caption = "Zero values indicate lack of data; no true zeros") +
+  theme_minimal()
+privates_plot
+```
+
+```{r goodness_plot}
+goodness_plot <- ggplot(stats) +
+  aes(x = goodness) +
+  geom_density(fill = "darkolivegreen1", alpha = 0.6) +
+  geom_vline(xintercept = 0.33, color = "firebrick") +
+  xlim(-0.1, 1) +
+  labs(x = "Goodness", y = "Density",
+       caption = "Zero values indicate lack of data") +
+  theme_minimal()
+goodness_plot
+```
+
+```{r combine_stat_plots}
+ggarrange(privates_plot, goodness_plot, labels = c("A", "B"))
+```
+
+Barring zeros, the values are indeed low. Not that as there is no consensus, this plot is nearly the mirror of the privates plot.
+
+Let us now look at hit counts. Empirical statistics first.
+```{r summary_hits}
+summary(hits$total)
+```
+
+There is huge variation in hit counts. There are zeros, but some groups hit tens of thousands. A median of 382 does not sound bad. Let's look at each database.
+
+```{r summry_oma}
+summary(hits$OMA)
+```
+
+OMA yields a bit less hits than the average (although, as Toni claims, good ones). Some spikes seem to exist though.
+
+```{r summary_panther}
+summary(hits$PANTHER)
+```
+
+This shows a similar picture to OMA.
+
+```{r summary_eggnog}
+summary(hits$EggNOG)
+```
+
+Surprising. There are lots of zeros, but if EggNOG finds something, it finds a lot.
+
+Let's make plots now.
+```{r plot_total}
+plot_total <- ggplot(hits) +
+  aes(x = total) +
+  geom_histogram(bins = 100) +
+  theme_light()
+plot_total
+```
+
+Let's zoom on the small values.
+
+```{r plot_zoom}
+plot_total_zoom <- ggplot(hits) +
+  aes(x = total) +
+  geom_histogram(bins = 100) +
+  xlim(-100,3000) +
+  theme_light()
+plot_total_zoom
+```
+
+```{r plot_total_cooler}
+total_plot <- ggplot(hits %>% transform(total = total + 0.01)) +
+  aes(x = total) +
+  geom_density(alpha = 0.6, fill = "darkorchid1") +
+  scale_x_continuous(trans = "log10", labels = label_comma(scale_cut = cut_short_scale())) +
+  labs(title = "Total ortholog counts", x = "Number of orthologs (log10 scale)", y = "Density") +
+  theme_minimal()
+
+total_plot
+```
+
+The numbers are mostly small, but zeros are infrequent. There is a good number of high-hit queries as well.
+
+Now the databases.
+
+```{r plot_oma}
+plot_oma <- ggplot(hits) +
+  aes(x = OMA) +
+  geom_histogram(bins = 100) +
+  theme_light()
+plot_oma
+```
+
+More zeros here. However, a vast majority of queries got something. Very high values are rare.
+
+```{r plot_panther}
+plot_panther <- ggplot(hits) +
+  aes(x = PANTHER) +
+  geom_histogram(bins = 100) +
+  theme_light()
+plot_panther
+```
+
+Interesting. Very few zeros, but a lot of small values. Extremely few above 500.
+
+```{r plot_eggnog}
+plot_eggnog <- ggplot(hits) +
+  aes(x = EggNOG) +
+  geom_histogram(bins = 100) +
+  theme_light()
+plot_eggnog
+```
+
+This is a big number. Zoom time.
+
+```{r plot_eggnog_zoom}
+plot_eggnog_zoom <- ggplot(hits) +
+  aes(x = EggNOG) +
+  geom_histogram(bins = 100) +
+  xlim(-100, 3000) +
+  theme_light()
+plot_eggnog_zoom
+```
+
+That is a lot of zeros. And no particular trend in the values above.
+
+Let's compare the distributions.
+
+```{r comparison}
+comparison <- hits %>%
+  select(-total) %>%
+  transform(OMA = OMA + 0.01, PANTHER = PANTHER + 0.01, EggNOG = EggNOG + 0.01) %>%
+  pivot_longer(!id, names_to = "source", values_to = "count") %>%
+  ggplot() +
+    aes(x = source, y = count, fill = source) +
+    ylim(-100,3000) +
+    geom_violin(alpha = 0.6) +
+    scale_fill_viridis_d() +
+    scale_y_continuous(trans = "log10", labels = label_comma(scale_cut = cut_short_scale())) +
+    labs(title = "Ortholog counts by database", x = "Density by source", y = "Number of orthologs (log10 scale)") +
+    theme_minimal() +
+    theme(legend.position = "none")
+comparison
+```
+
+The distributions look similar, with the differences described above. EggNOG has a very visible tail.
+

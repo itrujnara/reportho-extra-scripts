@@ -1,0 +1,204 @@
+---
+title: "Ortholog filtering"
+author: "Igor Trujnara"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+library(tidyverse)
+library(scales)
+library(reshape2)
+```
+
+In this document we will analyze the results of filtering the orthologs by score. We will use a slightly larger sample of 111 queries because the folder I used contained more results and I couldn't be bothered to filter.
+
+We load the data.
+
+```{r load_data}
+setwd("out_1k/orthologs/score_table/")
+hits_1 <- read.csv("hits_1.csv")
+hits_2 <- read.csv("hits_2.csv")
+hits_3 <- read.csv("hits_3.csv")
+```
+
+We add an extra column for convenience.
+
+```{r merge_hits}
+hits_1$threshold <- 1
+hits_2$threshold <- 2
+hits_3$threshold <- 3
+hits <- rbind(hits_1, hits_2, hits_3)
+```
+
+Histograms, you know the drill.
+
+```{r plot_total}
+ggplot(hits) +
+  aes(x = total) +
+  geom_histogram(bins=100) +
+  facet_wrap(~threshold, scale = "free_x") +
+  labs(x = "Number of orthologs", y = "Count", title = "Ortholog counts by threshold")
+```
+
+```{r plot_total}
+ggplot(hits) +
+  aes(x = total) +
+  geom_histogram(bins=100) +
+  facet_wrap(~threshold, scale = "free_x") +
+  labs(x = "Number of orthologs", y = "Count", title = "Ortholog counts by threshold")
+```
+
+```{r plot_total_overlaid_log}
+ggplot(hits) +
+  aes(x = total, fill = as.factor(threshold)) +
+  geom_histogram(bins=100, alpha = 0.6) +
+  scale_x_continuous(trans = "log10", labels = label_comma(scale_cut = cut_short_scale())) +
+  labs(x = "Number of orthologs", y = "Count",
+       fill = "Minimum score", title = "Ortholog counts by threshold",
+       caption = "Zero values have been removed") +
+  theme_minimal()
+```
+
+```{r plot_total_density_log}
+total_thr_plot <- ggplot(hits %>% transform(total = total + 0.01)) +
+  aes(x = total, fill = as.factor(threshold)) +
+  geom_density(alpha = 0.6) +
+  scale_x_continuous(trans = "log10", labels = label_comma(scale_cut = cut_short_scale())) +
+  scale_fill_brewer(palette = "Accent") +
+  labs(x = "Number of orthologs (log10 scale)", y = "Density",
+       fill = "Minimum score", title = "Total ortholog counts by threshold") +
+  theme_minimal()
+
+total_thr_plot
+```
+
+```{r plot_total_box}
+ggplot(hits) +
+  aes(x = as.factor(threshold), y = total) +
+  geom_boxplot() +
+  labs(title = "Hit counts by threshold", x = "Number of orthologs", y = "Count")
+```
+
+This is unreadable. I have two ideas on how to fix it.
+
+```{r plot_total_box_ylim}
+ggplot(hits) +
+  aes(x = as.factor(threshold), y = total) +
+  geom_boxplot() +
+  ylim(-10, 2000) +
+  labs(title = "Hit counts by threshold", x = "Number of orthologs", y = "Count")
+```
+
+```{r plot_total_box_log}
+ggplot(hits %>% filter(threshold < 3) %>% transform(total = total + 0.01)) +
+  aes(x = as.factor(threshold), y = total, fill = as.factor(threshold)) +
+  geom_boxplot() +
+  scale_y_continuous(trans = "log10", labels = label_comma(scale_cut = cut_short_scale())) +
+  scale_fill_brewer(palette = "Accent") +
+  labs(title = "Ortholog counts by threshold", fill = "Minimum score", x = "", y = "Count", 
+       caption = "Zero values have been removed") +
+  theme_minimal()
+```
+
+Zooms now.
+
+```{r total_zoom_1}
+ggplot(hits_1) +
+  aes(x = total) +
+  geom_histogram(bins = 100) +
+  xlim(-10,1000) +
+  labs(x = "Number of orthologs", y = "Count", title = "Score >= 1")
+```
+
+```{r total_zoom_2}
+ggplot(hits_1) +
+  aes(x = total) +
+  geom_histogram(bins = 100) +
+  xlim(-10,200) +
+  labs(x = "Number of orthologs", y = "Count", title = "Score >= 1")
+```
+
+```{r total_zoom_3}
+ggplot(hits_2) +
+  aes(x = total) +
+  geom_histogram(bins = 26) +
+  xlim(-3,25) +
+  labs(x = "Number of orthologs", y = "Count", title = "Score >= 2")
+```
+
+Now by database.
+
+```{r oma_plots}
+ggplot(hits) +
+  aes(x = OMA) +
+  geom_histogram(bins = 100) +
+  facet_wrap(~threshold, scales = "free_x") +
+  labs(title = "OMA", x = "OMA hits", y = "Count")
+```
+
+```{r oma_alt}
+ggplot(hits %>% filter(threshold < 3) %>% transform(OMA = OMA + 0.01)) +
+  aes(x = OMA, fill = as.factor(threshold)) +
+  geom_density(alpha = 0.6) +
+  scale_x_continuous(trans = "log10", labels = label_comma(scale_cut = cut_short_scale())) +
+  labs(x = "Number of OMA hits", y = "Density", fill = "Minimum support",
+       title = "OMA hits by threshold")
+```
+
+```{r comparison_density}
+hits_long <- hits %>%
+  filter(threshold < 3) %>%
+  melt(id.vars = c("id", "threshold", "total")) %>%
+  transform(value = value + 0.01)
+
+comparison_thr <- ggplot(hits_long) +
+  aes(x = value, fill = as.factor(threshold)) +
+  geom_density(alpha = 0.6) +
+  scale_x_continuous(trans = "log10", labels = label_comma(scale_cut = cut_short_scale())) +
+  scale_fill_brewer(palette = "Accent") +
+  facet_wrap(~variable) +
+  labs(x = "Number of orthologs (log10 scale)", y = "Density", fill = "Minimum support") +
+  theme_minimal()
+
+comparison_thr
+```
+
+```{r panther_plots}
+ggplot(hits) +
+  aes(x = PANTHER) +
+  geom_histogram(bins = 100) +
+  facet_wrap(~threshold, scales = "free_x") +
+  labs(title = "PANTHER", x = "PANTHER hits", y = "Count")
+```
+
+```{r eggnog_plots}
+ggplot(hits) +
+  aes(x = EggNOG) +
+  geom_histogram(bins = 100) +
+  facet_wrap(~threshold, scales = "free_x") +
+  labs(title = "EggNOG", x = "EggNOG hits", y = "Count")
+```
+
+```{r compare_plot}
+ggplot(hits %>% filter(threshold < 3) %>% melt(id.vars = c("id", "threshold", "total"))) +
+  aes(x = as.factor(threshold), y = value, fill = as.factor(threshold)) +
+  facet_wrap(~variable) +
+  geom_boxplot() +
+  scale_y_continuous(trans = "log10", labels = label_comma(scale_cut = cut_short_scale())) +
+  labs(x = "", y = "Number of orthologs", fill = "Minimum support") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+```
+
+Observations:
+
+- there is no consensus
+- there is a major drop when we filter by score >= 2
+- Peer Bork should go to FAIR data jail
